@@ -77,6 +77,9 @@ class MainWindow(QWidget):
             # Долгота и широта центра карты в градусах
             "ll": f"{self.x},{self.y}",
 
+            # Протяженность области показа карты по долготе и широте (в градусах)
+            # "spn": "0.001,0.001",
+
             # Уровень масштабирования карты (0-21)
             "z": self.zoom,
 
@@ -119,6 +122,21 @@ class MainWindow(QWidget):
         """
         self.create_map()
         self.display_map()
+
+    def keyPressEvent(self, event):
+        is_update = False
+
+        # Проверка на запрос изменения масштаба
+        if event.key() == Qt.Key.Key_PageUp:
+            self.zoom = min(self.zoom + 1, 21)
+            is_update = True
+        elif event.key() == Qt.Key.Key_Down:
+            self.zoom = max(self.zoom - 1, 0)
+            is_update = True
+
+        if is_update:
+            self.update_map()
+
 
 
 
