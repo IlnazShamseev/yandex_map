@@ -59,7 +59,7 @@ class MainWindow(QWidget):
 
         self.update_map()
 
-    def create_map(self):
+    def create_map(self, *arg):
         """
         Создает карту
         Ничего не возвращает
@@ -100,7 +100,6 @@ class MainWindow(QWidget):
             print("Ошибка выполнения запроса:")
             print(server_address, params)
             print(f"Http статус: {response.status_code} ( {response.reason} )")
-            sys.exit(1)
 
         ## Запишем полученное изображение в файл.
         map_file = "map.png"
@@ -126,18 +125,47 @@ class MainWindow(QWidget):
     def keyPressEvent(self, event):
         is_update = False
 
-        # Проверка на запрос изменения масштаба
+        ## Проверка на запрос изменения масштаба
         if event.key() == Qt.Key.Key_PageUp:
             self.zoom = min(self.zoom + 1, 21)
             is_update = True
-        elif event.key() == Qt.Key.Key_Down:
+        elif event.key() == Qt.Key.Key_PageDown:
             self.zoom = max(self.zoom - 1, 0)
+            is_update = True
+
+        ## Проверка на запрос перемещения карты
+        if event.key() == Qt.Key.Key_Up:
+            self.change_coord(0, 1)
+            is_update = True
+        elif event.key() == Qt.Key.Key_Down:
+            self.change_coord(0, -1)
+            is_update = True
+        elif event.key() == Qt.Key.Key_Right:
+            self.change_coord(1, 0)
+            is_update = True
+        elif event.key() == Qt.Key.Key_Left:
+            self.change_coord(-1, 0)
             is_update = True
 
         if is_update:
             self.update_map()
 
+    def change_coord(self, x_delta: int, y_delta: int):
+        """
+        Обновляет центр карты
+        :param x_delta: число из [-1:1] для оси y
+        :param y_delta: число из [-1:1] для оси x
+        """
+        coefficients = {
+            "x": lambda zoom: 0.000075 * 2 ** (21 - zoom),
+            "y": lambda zoom: 0.000045 * 2 ** (21 - zoom)
+        }
 
+        ## Обновляем координаты
+        self.x = max(min(self.x + coefficients["x"](self.zoom) * x_delta, 179), 0)
+        self.y = max(min(self.y + coefficients["y"](self.zoom) * y_delta, 89), 0)
+
+        self.update_map()
 
 
 def except_hook(cls, exception, traceback):
