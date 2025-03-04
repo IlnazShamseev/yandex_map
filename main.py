@@ -1,15 +1,29 @@
+import os
 import sys
 
 import requests
 from PyQt6 import QtCore
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import (
-    QFont, QPixmap
+    QFont, QPixmap, QIcon
 )
 from PyQt6.QtWidgets import (
-    QApplication, QWidget,
-    QLabel
+    QApplication, QLabel, QPushButton, QMainWindow
 )
+
+
+def way(files):
+    """
+    Возвращает полный путь до файла
+    :param files: путь до файла через итерируемые объекты
+    :return: путь до файла с настройкой под ОС
+    """
+    fullname = os.path.join("data", *files)
+    if not os.path.isfile(fullname):
+        print(f"Файл '{fullname}' не найден")
+        import sys
+        sys.exit()
+    return fullname
 
 
 def font(style="Consolas", size=14):
@@ -23,9 +37,21 @@ def font(style="Consolas", size=14):
 
 alignmentCenter = QtCore.Qt.AlignmentFlag.AlignCenter
 alignmentLeft = QtCore.Qt.AlignmentFlag.AlignLeft
+alignmentRight = QtCore.Qt.AlignmentFlag.AlignRight
+
+stiles = {
+    "MainWidget": {
+        "Light": """ QWidget { background:rgb(240,240,240); border-radius: 10px; } """,
+        "Dark": """QWidget { background:rgb(100,100,100); border-radius: 10px; }""",
+    },
+    "Widget": {
+        "Light": """ QWidget { background:rgb(220,220,220); border-radius: 10px; } """,
+        "Dark": """QWidget { background:rgb(70,70,70); border-radius: 10px; color: white}""",
+    },
+}
 
 
-class MainWindow(QWidget):
+class MainWindow(QMainWindow):
     """
     Класс для отображения карты
     """
@@ -33,6 +59,12 @@ class MainWindow(QWidget):
     def __init__(self):
         ## Проводим инициализацию
         super().__init__()
+
+        ## Основные данные для работы с картой
+        self.x = 52.318529
+        self.y = 54.885912
+        self.zoom = 19
+
         self.initUI()
 
     def initUI(self):
@@ -40,22 +72,35 @@ class MainWindow(QWidget):
         Метод для создания интерфейса
         """
 
-        self.setWindowTitle("Maps")
-        self.setFixedSize(500, 500)
+        self.setWindowTitle(" ")
+        self.setWindowIcon(QIcon(way(("icon.png",))))
+        self.setFixedSize(800, 520)
 
         ## Добавляем стиля
-        self.setStyleSheet(""" background:rgb(208,208,208); border-radius: 50px; """)
+        self.setStyleSheet(stiles["MainWidget"]["Light"])
 
-        ## Основные данные для работы с картой
-        self.x = 52.318529
-        self.y = 54.885912
-        self.zoom = 19
+        ## Переключатель темы
+        self.theme = QPushButton(self)
+        self.theme.move(25, 425)
+        self.theme.resize(275, 50)
+        self.theme.setText("Light")
+        self.theme.setFont(font(size=18))
+        self.theme.setStyleSheet(stiles["Widget"]["Light"])
+        self.theme.clicked.connect(self.changing_theme)
+        self.theme.clearFocus()
 
         ## Сама карта
         self.map = QLabel(self)
-        self.map.move(25, 25)
+        self.map.move(325, 25)
         self.map.resize(450, 450)
-        self.map.setVisible(True)
+        self.map.setStyleSheet(stiles["Widget"]["Light"])
+
+        ## Статус бар для показа ошибки
+        self.statusBar().resize(50, 50)
+        self.statusBar()
+        self.statusBar().setFont(font(size=10))
+        self.statusBar().setStyleSheet(stiles["Widget"]["Light"])
+        self.statusBar().clearFocus()
 
         self.update_map()
 
@@ -86,14 +131,22 @@ class MainWindow(QWidget):
             # Размеры. Его не надо трогать
             "size": "450,450",
 
+            # Тема запрашиваемого изображения карты. Поддерживаются светлая "light" и тёмная "dark" темы.
+            "theme": self.theme.text().lower(),
+
             # Тип карты
             "maptype": "map",
         }
-
-        response = requests.get(
-            server_address,
-            params=params
-        )
+        response = None
+        try:
+            response = requests.get(
+                server_address,
+                params=params
+            )
+            self.statusBar().showMessage(" ")
+        except:
+            self.statusBar().showMessage("Ошибка")
+            return
 
         ## Проверка на соединения с сервером
         if not response:
@@ -167,6 +220,37 @@ class MainWindow(QWidget):
 
         self.update_map()
 
+    def get_theme(self, reverse=False):
+        """
+        Возвращает цвет темы. Если reverse==True, возвращает обратный цвет темы
+        :param reverse: bool
+        :return: str
+        """
+
+        text = "Light"
+        if reverse:
+            if self.theme.text() == "Light":
+                text = "Dark"
+        else:
+            if self.theme.text() != "Light":
+                text = "Dark"
+        return text
+
+    def changing_theme(self):
+        """
+        Изменяем тему
+        """
+
+        theme = self.get_theme(reverse=True)
+        self.theme.setText(theme)
+        self.setStyleSheet(stiles["MainWidget"][theme])
+        self.theme.setStyleSheet(stiles["Widget"][theme])
+        self.statusBar().setStyleSheet(stiles["Widget"][theme])
+
+        self.theme.clearFocus()
+
+        self.update_map()
+
 
 def except_hook(cls, exception, traceback):
     """
@@ -179,6 +263,7 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     wnd = MainWindow()
     wnd.setVisible(True)
+    wnd.theme.clearFocus()
     sys.excepthook = except_hook
     sys.exit(app.exec())
 
