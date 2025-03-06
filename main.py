@@ -8,8 +8,15 @@ from PyQt6.QtGui import (
     QFont, QPixmap, QIcon
 )
 from PyQt6.QtWidgets import (
-    QApplication, QLabel, QPushButton, QMainWindow
+    QApplication, QMainWindow,
+    QLabel, QPushButton, QLineEdit
 )
+
+apikeys = {
+    "geocoder": "8013b162-6b42-4997-9691-77b7074026e0",
+    "static-map": "f3a0fe3a-b07e-4840-a1da-06f18b2ddf13",
+    "search-maps": "dda3ddba-c9ea-4ead-9010-f43fbc15c6e3",
+}
 
 
 def way(files):
@@ -21,7 +28,6 @@ def way(files):
     fullname = os.path.join("data", *files)
     if not os.path.isfile(fullname):
         print(f"Файл '{fullname}' не найден")
-        import sys
         sys.exit()
     return fullname
 
@@ -79,6 +85,24 @@ class MainWindow(QMainWindow):
         ## Добавляем стиля
         self.setStyleSheet(stiles["MainWidget"]["Light"])
 
+        ## Строка для ввода
+        self.search_edit = QLineEdit(self)
+        self.search_edit.move(25, 25)
+        self.search_edit.resize(200, 50)
+        self.search_edit.setPlaceholderText("Search")
+        self.search_edit.setFont(font(size=14))
+        self.search_edit.setStyleSheet(stiles["Widget"]["Light"])
+        self.search_edit.clearFocus()
+
+        ## Кнопка для поиска
+        self.search_btn = QPushButton(self)
+        self.search_btn.move(250, 25)
+        self.search_btn.resize(50, 50)
+        self.search_btn.setFont(font(size=14))
+        self.search_btn.setStyleSheet(stiles["Widget"]["Light"])
+        self.search_btn.clicked.connect(self.search)
+        self.search_btn.clearFocus()
+
         ## Переключатель темы
         self.theme = QPushButton(self)
         self.theme.move(25, 425)
@@ -109,34 +133,23 @@ class MainWindow(QMainWindow):
         Создает карту
         Ничего не возвращает
         """
-
-        # https://yandex.ru/maps-api/docs/static-api/request.html
-        # документация тут
-
         server_address = "https://static-maps.yandex.ru/v1"
 
         params = {
             # Ключ. Его не надо трогать
-            "apikey": "f3a0fe3a-b07e-4840-a1da-06f18b2ddf13",
-
+            "apikey": apikeys["static-map"],
             # Долгота и широта центра карты в градусах
             "ll": f"{self.x},{self.y}",
-
-            # Протяженность области показа карты по долготе и широте (в градусах)
-            # "spn": "0.001,0.001",
-
             # Уровень масштабирования карты (0-21)
             "z": self.zoom,
-
             # Размеры. Его не надо трогать
             "size": "450,450",
-
             # Тема запрашиваемого изображения карты. Поддерживаются светлая "light" и тёмная "dark" темы.
             "theme": self.theme.text().lower(),
-
             # Тип карты
             "maptype": "map",
         }
+
         response = None
         try:
             response = requests.get(
@@ -159,6 +172,53 @@ class MainWindow(QMainWindow):
         with open(map_file, "wb") as file:
             file.write(response.content)
 
+    def search(self):
+        """
+        Поиск места по адресу или организации
+        """
+        if not self.search_edit.text():
+            return
+
+        server_address = "https://search-maps.yandex.ru/v1"
+
+        params = {
+            # Ключ. Его не надо трогать
+            "apikey": apikeys["search-maps"],
+            # Текст поискового запроса.
+            # Например, название географического объекта, адрес, координаты, название организации, телефон.
+            "text": self.search_edit.text(),
+            # Количество возвращаемых объектов
+            "results": 1,
+            # Предпочитаемый язык ответа
+            "lang": "ru_RU"
+        }
+
+        response = None
+        try:
+            response = requests.get(
+                # f"https://search-maps.yandex.ru/v1/?text=Bank Alfalah&type=biz&lang=en_US&apikey={apikeys["search-maps"]}"
+                server_address,
+                params=params
+            )
+            self.statusBar().showMessage(" ")
+        except:
+            print(1)
+            self.statusBar().showMessage("Ошибка")
+            return
+
+        ## Проверка на соединения с сервером
+        if not response:
+            print("Ошибка выполнения запроса:")
+            print(server_address, params)
+            print(f"Http статус: {response.status_code} ( {response.reason} )")
+
+        data = response.json()
+        x, y = data["features"][0]["geometry"]["coordinates"]
+        self.x = x
+        self.y = y
+
+        self.update_map()
+
     def display_map(self):
         """
         Отображает карту
@@ -172,6 +232,11 @@ class MainWindow(QMainWindow):
         """
         Обновляет состояние карты
         """
+
+        self.search_edit.clearFocus()
+        self.search_btn.clearFocus()
+        self.theme.clearFocus()
+
         self.create_map()
         self.display_map()
 
@@ -244,10 +309,10 @@ class MainWindow(QMainWindow):
         theme = self.get_theme(reverse=True)
         self.theme.setText(theme)
         self.setStyleSheet(stiles["MainWidget"][theme])
+        self.search_edit.setStyleSheet(stiles["Widget"][theme])
+        self.search_btn.setStyleSheet(stiles["Widget"][theme])
         self.theme.setStyleSheet(stiles["Widget"][theme])
         self.statusBar().setStyleSheet(stiles["Widget"][theme])
-
-        self.theme.clearFocus()
 
         self.update_map()
 
@@ -263,7 +328,6 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     wnd = MainWindow()
     wnd.setVisible(True)
-    wnd.theme.clearFocus()
     sys.excepthook = except_hook
     sys.exit(app.exec())
 
